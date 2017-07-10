@@ -35,6 +35,7 @@
 #include <osmocom/gsm/lapdm.h>
 #include <osmocom/gsm/protocol/gsm_12_21.h>
 #include <osmocom/gsm/protocol/gsm_08_58.h>
+#include <osmocom/gsm/protocol/gsm_04_08.h>
 #include <osmocom/gsm/protocol/ipaccess.h>
 #include <osmocom/trau/osmo_ortp.h>
 
@@ -2587,6 +2588,61 @@ static int rslms_is_meas_rep(struct msgb *msg)
 	return 0;
 }
 
+static int rslms_is_gprs_susp_req(struct msgb *msg)
+{
+	struct abis_rsl_common_hdr *rh = msgb_l2(msg);
+	struct abis_rsl_rll_hdr *rllh;
+	struct gsm48_hdr *gh;
+
+	if ((rh->msg_discr & 0xfe) != ABIS_RSL_MDISC_RLL)
+		return 0;
+
+	if (rh->msg_type != RSL_MT_UNIT_DATA_IND)
+		return 0;
+
+	rllh = msgb_l2(msg);
+	if (rsl_link_id_is_sacch(rllh->link_id))
+		return 0;
+
+	gh = msgb_l3(msg);
+	if (gh->proto_discr != GSM48_PDISC_RR)
+		return 0;
+
+	switch (gh->msg_type) {
+	case GSM48_MT_RR_GPRS_SUSP_REQ:
+		return 1;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+/* TS 44.018 9.1.13b GPRS suspension request */
+static int handle_gprs_susp_req(struct msgb *msg)
+{
+	struct gsm48_hdr *gh = msgb_l3(msg);
+	struct gsm48_gprs_susp_req *gsr;
+	uint32_t tlli;
+	int rc;
+
+	if (!gh || msgb_l3len(msg) < sizeof(*gh)+sizeof(*gsr)) {
+		LOGP(DRSL, LOGL_NOTICE, "%s Short GPRS SUSPEND REQ received, ignoring\n", gsm_lchan_name(msg->lchan));
+		return -EINVAL;
+	}
+
+	gsr = (struct gsm48_gprs_susp_req *) gh->data;
+	tlli = osmo_htnol(gsr->tlli);
+
+	LOGP(DRSL, LOGL_INFO, "%s Fwd GPRS SUSPEND REQ for TLLI=0x%08x to PCU\n",
+		gsm_lchan_name(msg->lchan), tlli);
+	rc = pcu_tx_susp_req(msg->lchan, tlli, gsr->ra_id, gsr->cause);
+
+	msgb_free(msg);
+
+	return rc;
+}
+
 static inline uint8_t ms_to2rsl(const struct gsm_lchan *lchan, const struct lapdm_entity *le)
 {
 	return (lchan->ms_t_offs >= 0) ? lchan->ms_t_offs : (lchan->p_offs - le->ta);
@@ -2727,6 +2783,8 @@ int lapdm_rll_tx_cb(struct msgb *msg, struct lapdm_entity *le, void *ctx)
 		rc = rsl_tx_meas_res(lchan, msgb_l3(msg), msgb_l3len(msg), le);
 		msgb_free(msg);
 		return rc;
+	} else if (rslms_is_gprs_susp_req(msg)) {
+		return handle_gprs_susp_req(msg);
 	} else {
 		LOGP(DRSL, LOGL_INFO, "%s Fwd RLL msg %s from LAPDm to A-bis\n",
 			gsm_lchan_name(lchan), rsl_msg_name(rh->msg_type));
