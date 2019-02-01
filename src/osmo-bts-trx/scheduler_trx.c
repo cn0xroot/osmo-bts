@@ -946,9 +946,9 @@ int rx_pdtch_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 		return 0;
 	}
 	ber10k = compute_ber10k(n_bits_total, n_errors);
-	return _sched_compose_ph_data_ind(l1t, tn, (fn + GSM_HYPERFRAME - 3) % GSM_HYPERFRAME, chan,
-		l2, rc, *rssi_sum / *rssi_num, 4 * (*toa256_sum) / *toa_num, 0,
-					  ber10k, PRES_INFO_BOTH);
+	return _sched_compose_ph_data_ind(l1t, tn, *first_fn, chan, l2, rc,
+		*rssi_sum / *rssi_num, 4 * (*toa256_sum) / *toa_num, 0, ber10k,
+		PRES_INFO_BOTH);
 }
 
 /*! \brief a single TCH/F burst was received by the PHY, process it */
@@ -1070,9 +1070,8 @@ int rx_tchf_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 	/* FACCH */
 	if (rc == GSM_MACBLOCK_LEN) {
 		uint16_t ber10k = compute_ber10k(n_bits_total, n_errors);
-		_sched_compose_ph_data_ind(l1t, tn, (fn + GSM_HYPERFRAME - 7) % GSM_HYPERFRAME, chan,
-			tch_data + amr, GSM_MACBLOCK_LEN, rssi, 4 * toa256, 0,
-					   ber10k, PRES_INFO_UNKNOWN);
+		_sched_compose_ph_data_ind(l1t, tn, *first_fn, chan, tch_data + amr,
+			GSM_MACBLOCK_LEN, rssi, 4 * toa256, 0, ber10k, PRES_INFO_UNKNOWN);
 bfi:
 		if (rsl_cmode == RSL_CMOD_SPD_SPEECH) {
 			/* indicate bad frame */
@@ -1124,7 +1123,7 @@ bfi:
 
 	/* TCH or BFI */
 compose_l1sap:
-	return _sched_compose_tch_ind(l1t, tn, (fn + GSM_HYPERFRAME - 7) % GSM_HYPERFRAME, chan,
+	return _sched_compose_tch_ind(l1t, tn, *first_fn, chan,
 		tch_data, rc);
 }
 
@@ -1261,10 +1260,8 @@ int rx_tchh_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 	if (rc == GSM_MACBLOCK_LEN) {
 		chan_state->ul_ongoing_facch = 1;
 		uint16_t ber10k = compute_ber10k(n_bits_total, n_errors);
-		_sched_compose_ph_data_ind(l1t, tn,
-			(fn + GSM_HYPERFRAME - 10 - ((fn % 26) >= 19)) % GSM_HYPERFRAME, chan,
-			tch_data + amr, GSM_MACBLOCK_LEN, rssi, toa256/64, 0,
-					   ber10k, PRES_INFO_UNKNOWN);
+		_sched_compose_ph_data_ind(l1t, tn, *first_fn, chan, tch_data + amr,
+			GSM_MACBLOCK_LEN, rssi, toa256/64, 0, ber10k, PRES_INFO_UNKNOWN);
 bfi:
 		if (rsl_cmode == RSL_CMOD_SPD_SPEECH) {
 			/* indicate bad frame */
@@ -1306,9 +1303,8 @@ compose_l1sap:
 	 * with the slot 12, so an extra FN must be subtracted to get correct
 	 * start of frame.
 	 */
-	return _sched_compose_tch_ind(l1t, tn,
-		(fn + GSM_HYPERFRAME - 10 - ((fn%26)==19) - ((fn%26)==20)) % GSM_HYPERFRAME,
-		chan, tch_data, rc);
+	printf("TCHH\n");
+	return _sched_compose_tch_ind(l1t, tn, *first_fn, chan, tch_data, rc);
 }
 
 /* schedule all frames of all TRX for given FN */
