@@ -1423,7 +1423,8 @@ int down_oml(struct gsm_bts *bts, struct msgb *msg)
 	int ret = 0;
 
 	if (msgb_l2len(msg) < sizeof(*oh)) {
-		LOGP(DOML, LOGL_NOTICE, "OML message too short\n");
+		oml_tx_failure_event_rep(&bts->mo, OSMO_EVT_MAJ_UKWN_MSG,
+					 "OML message too short\n");
 		msgb_free(msg);
 		return -EIO;
 	}
