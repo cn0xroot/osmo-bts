@@ -1438,6 +1438,21 @@ int down_oml(struct gsm_bts *bts, struct msgb *msg)
 		return -EIO;
 	}
 
+	if (msgb_l3len(msg) < oh->length) {
+		oml_tx_failure_event_rep(&bts->mo, OSMO_EVT_MAJ_UKWN_MSG,
+					 "Short OML message: %u < %u\n",
+					 msgb_l3len(msg), oh->length);
+		msgb_free(msg);
+		return -EIO;
+	}
+
+	if (msgb_l3len(msg) > oh->length) {
+		LOGP(DOML, LOGL_NOTICE, "OML message with %u extraneous bytes at end: %s\n",
+			msgb_l3len(msg) - oh->length, msgb_hexdump(msg));
+		/* remove extra bytes at end */
+		msgb_l3trim(msg, oh->length);
+	}
+
 	switch (oh->mdisc) {
 	case ABIS_OM_MDISC_FOM:
 		if (msgb_l2len(msg) < sizeof(*oh)) {
